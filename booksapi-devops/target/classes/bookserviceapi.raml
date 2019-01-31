@@ -1,0 +1,58 @@
+#%RAML 1.0
+title: BookServiceAPI
+version: 1.0
+types:
+  books: !include dataTypes/books.raml
+  bookbyID: !include dataTypes/bookbyID.raml
+/books:
+  get:
+    responses:
+      200:
+        body:
+          application/json:
+            type: books[]
+            example: !include example/booksExample.raml
+      400:
+        body:
+          application/json:
+            example: |
+              {
+                "message": "Error retrieving data from the books database."
+              }
+  /{year}:
+    get:
+      responses:
+        200:
+          body:
+            application/json:
+              type: books[]
+              example: !include example/booksExample.raml        
+        404:
+          body:
+            application/json:
+              example: |
+                {"message": "No books found published in requested year"}
+
+  post:
+    body: 
+      application/json:
+        type: bookbyID[]
+        example: !include example/booksbyIDExample.raml
+    responses:
+      201:
+        body:
+          application/json:
+            example: |
+              {"message": "Book created (but not really)"} 
+      400:
+        body:
+          application/json:
+             example: |
+                {"message": "Error creating books. Please check the JSON object and make sure it's valid."}
+        
+    
+
+    
+
+        
+        

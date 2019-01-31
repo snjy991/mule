@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <db:mysql-config name="MySQL_Configuration" host="localhost" port="3306" user="root" password="password" database="dev" doc:name="MySQL Configuration"/>
+    <flow name="GetBooks_Flow">
+        <scatter-gather doc:name="Scatter-Gather">
+            <processor-chain>
+                <db:select config-ref="MySQL_Configuration" doc:name="AuthorAndTitles">
+                    <db:parameterized-query><![CDATA[SELECT distinct firstName,lastName,title,editionNumber,copyright,fileType,price,publisherID
+FROM authors, authorISBN,titles
+WHERE authors.authorID = authorISBN.authorID and authorISBN.isbn=titles.isbn]]></db:parameterized-query>
+                </db:select>
+                <flow-ref name="TransformAuthorsTitle_Sub_Flow" doc:name="TransformAuthor&amp;Title"/>
+            </processor-chain>
+            <processor-chain>
+                <db:select config-ref="MySQL_Configuration" doc:name="publishers">
+                    <db:parameterized-query><![CDATA[select * from publishers]]></db:parameterized-query>
+                </db:select>
+                <flow-ref name="TransformPublisher_Sub_Flow" doc:name="TransformPublisher"/>
+            </processor-chain>
+        </scatter-gather>
+        <flow-ref name="CombineBooksSub_Flow" doc:name="CombineBooks"/>
+    </flow>
+    <flow name="getBookByYear_Flow">
+        <set-variable variableName="year" value="#[message.inboundProperties.'http.uri.params'.year]" doc:name="setYear"/>
+        <scatter-gather doc:name="Scatter-Gather">
+            <processor-chain>
+                <db:select config-ref="MySQL_Configuration" doc:name="AuthorAndTitles">
+                    <db:dynamic-query><![CDATA[SELECT distinct firstName,lastName,title,editionNumber,copyright,fileType,price,publisherID
+FROM authors, authorISBN,titles
+WHERE authors.authorID = authorISBN.authorID and authorISBN.isbn=titles.isbn and copyright='#[flowVars.year]']]></db:dynamic-query>
+                </db:select>
+                <flow-ref name="TransformAuthorsTitle_Sub_Flow" doc:name="TransformAuthor&amp;Titles"/>
+            </processor-chain>
+            <processor-chain>
+                <db:select config-ref="MySQL_Configuration" doc:name="PublisherDetails">
+                    <db:parameterized-query><![CDATA[select * from publishers]]></db:parameterized-query>
+                </db:select>
+                <flow-ref name="TransformPublisher_Sub_Flow" doc:name="TransformPublisher"/>
+            </processor-chain>
+        </scatter-gather>
+        <flow-ref name="CombineBooksSub_Flow" doc:name="CombineBooks"/>
+    </flow>
+    <sub-flow name="TransformAuthorsTitle_Sub_Flow">
+        <dw:transform-message doc:name="Transform AuthorTitle" metadata:id="dcd2f82b-ac88-42ab-9c6d-98f1b67549fd">
+            <dw:input-payload doc:sample="sample_data/list_map.dwl"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+
+
+---
+payload map ((payload01 , indexOfPayload01) -> {
+	authorName: payload01.firstName ++ payload01.lastName,
+	title: payload01.title,
+	bookedition: payload01.editionNumber,
+	"published year": payload01.copyright,
+	booketype: payload01.fileType,
+	publisherID: payload01.publisherID,
+	price: payload01.price as :string
+})]]></dw:set-payload>
+        </dw:transform-message>
+    </sub-flow>
+    <sub-flow name="TransformPublisher_Sub_Flow">
+        <dw:transform-message doc:name="Transform Publishers" metadata:id="fb6b6f70-9ab0-42e7-a2ce-24ed84ca0746">
+            <dw:input-payload doc:sample="sample_data/list_map_1.dwl"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+payload map ((payload01 , indexOfPayload01) -> {
+	publisherID: payload01.publisherID,
+	publisherName: payload01.publisherName
+})]]></dw:set-payload>
+        </dw:transform-message>
+    </sub-flow>
+    <sub-flow name="CombineBooksSub_Flow">
+        <logger message="before transform #[payload]" level="INFO" doc:name="Logger"/>
+        <dw:transform-message doc:name="CombineOutput" metadata:id="1104d28c-accc-4535-8632-5910321f097a">
+            <dw:input-payload doc:sample="AuthorAndTitles.json" mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+%var output=(payload[1])
+%function getPublisherName(payload01PublisherID){
+	(output[?($.publisherID == payload01PublisherID)])
+}
+---
+payload[0] map ((payload01 , indexOfPayload01) -> {
+	authorName: payload01.authorName,
+	title: payload01.title,
+	bookedition: payload01.bookedition,
+	"published year": payload01."published year",
+	publisherName: getPublisherName(payload01.publisherID).publisherName,
+	booketype: payload01.booketype,
+	price: payload01.price
+})
+
+]]></dw:set-payload>
+        </dw:transform-message>
+        <logger message="after transform #[payload]" level="INFO" doc:name="Logger"/>
+    </sub-flow>
+</mule>

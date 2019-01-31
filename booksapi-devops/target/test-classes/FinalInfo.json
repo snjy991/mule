@@ -1,0 +1,20 @@
+[{
+"authorName": "sanjay chaudhary",
+"title": "learn coding",
+"bookedition": "4",
+"published year": "2019",
+"publisherID": "2",
+"publisherName": "SDK publishers",
+"booketype": "mp3",
+"price": "189"
+},
+{
+"authorName": "rohit chaudhary",
+"title": "learn coding by",
+"bookedition": "4",
+"published year": "2019",
+"publisherID": "2",
+"publisherName": "SDK publishers",
+"booketype": "pdf",
+"price": "190"
+}]
